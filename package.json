@@ -1,0 +1,8 @@
+{
+  "name": "personal-ai-life-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/site.test.js"
+  }
+}
