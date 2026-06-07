@@ -38,7 +38,8 @@ test("index exposes the requested tabs and static assets", () => {
     "Health & Fitness",
     "Travel & Vlogs",
     "Motivation",
-    "Movies & Series"
+    "Movies & Series",
+    "Nano Banana"
   ];
 
   for (const label of labels) {
@@ -59,7 +60,7 @@ test("curated dashboard data covers every requested section with sources", () =>
   assert.equal(data.meta.generatedOn, "2026-06-06");
   assert.deepEqual(
     Array.from(data.tabs.map((tab) => tab.id)),
-    ["ai", "gemini", "health", "travel", "motivation", "streaming"]
+    ["ai", "gemini", "health", "travel", "motivation", "streaming", "nano-banana"]
   );
 
   assert.ok(data.aiUpdates.length >= 8);
@@ -94,6 +95,11 @@ test("curated dashboard data covers every requested section with sources", () =>
 
   assert.ok(data.motivation.quotes.length >= 24);
   assert.ok(data.motivation.quotes.every((quote) => quote.text.length >= 20));
+
+  assert.ok(data.nanoBanana.models.length >= 7);
+  assert.ok(data.nanoBanana.models.some((model) => /Nano Banana 2/.test(model.label)));
+  assert.ok(data.nanoBanana.models.some((model) => /Nano Banana Pro/.test(model.label)));
+  assert.ok(data.nanoBanana.features.every((feature) => feature.title && feature.description));
 });
 
 test("Gemini request helper builds a browser REST call without exposing a committed key", () => {
@@ -223,4 +229,48 @@ test("streaming page renders production-style visual rails", () => {
   assert.match(css, /\.rt-badge/);
   assert.match(css, /\.poster-actions\s*{[\s\S]*flex-wrap:\s*wrap/);
   assert.match(css, /\.play-button\s*{[\s\S]*min-width:\s*72px/);
+});
+
+test("Nano Banana tab preserves the previous image generation project", () => {
+  const data = loadData();
+  const app = loadApp(data);
+  const html = read("index.html");
+  const appSource = read("assets/app.js");
+  const css = read("assets/styles.css");
+
+  assert.match(html, /data-tab="nano-banana"/);
+  assert.match(html, /id="panel-nano-banana"/);
+  assert.match(appSource, /renderNanoBananaPanel/);
+  assert.match(appSource, /nano-image-upload/);
+  assert.match(appSource, /processNanoImageFiles/);
+  assert.match(appSource, /sendNanoBananaMessage/);
+  assert.match(appSource, /clearNanoBananaChat/);
+  assert.match(appSource, /inlineData/);
+  assert.match(appSource, /responseModalities/);
+  assert.match(css, /\.nano-workbench/);
+  assert.match(css, /\.nano-chat-container/);
+  assert.match(css, /\.nano-upload-btn/);
+
+  const request = app.buildNanoBananaRequest({
+    model: "models/gemini-3.1-flash-image-preview",
+    userText: "Generate a cinematic product image",
+    images: [
+      {
+        mimeType: "image/png",
+        base64: "abc123"
+      }
+    ],
+    history: []
+  });
+
+  assert.match(request.url, /models\/gemini-3\.1-flash-image-preview:generateContent/);
+  const body = JSON.parse(request.options.body);
+  assert.deepEqual(body.generationConfig.responseModalities, ["TEXT", "IMAGE"]);
+  assert.deepEqual(body.contents[0].parts[0], {
+    inlineData: {
+      mimeType: "image/png",
+      data: "abc123"
+    }
+  });
+  assert.deepEqual(body.contents[0].parts[1], { text: "Generate a cinematic product image" });
 });

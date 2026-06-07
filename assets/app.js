@@ -15,6 +15,8 @@
     rawText: "",
     error: ""
   };
+  var nanoBananaHistory = [];
+  var nanoBananaImages = [];
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -198,6 +200,60 @@
     };
   }
 
+  function normalizeNanoModel(model) {
+    var fallback = data.nanoBanana && data.nanoBanana.defaultModel;
+    var value = model || fallback || "models/gemini-3.1-flash-image-preview";
+    return value.indexOf("models/") === 0 ? value : "models/" + value;
+  }
+
+  function buildNanoBananaRequest(input) {
+    var model = normalizeNanoModel(input.model);
+    var parts = [];
+
+    (input.images || []).forEach(function(image) {
+      if (!image || !image.base64 || !image.mimeType) return;
+      parts.push({
+        inlineData: {
+          mimeType: image.mimeType,
+          data: image.base64
+        }
+      });
+    });
+
+    if (input.userText) {
+      parts.push({ text: input.userText });
+    }
+
+    var contents = (input.history || []).slice(-8);
+    contents.push({
+      role: "user",
+      parts: parts
+    });
+
+    var headers = {
+      "Content-Type": "application/json"
+    };
+    if (input.apiKey) headers["x-goog-api-key"] = input.apiKey;
+
+    return {
+      url: "https://generativelanguage.googleapis.com/v1beta/" + model + ":generateContent",
+      options: {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          contents: contents,
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 8192,
+            responseModalities: model.indexOf("image") >= 0 ? ["TEXT", "IMAGE"] : ["TEXT"]
+          }
+        })
+      }
+    };
+  }
+
   function extractGeminiText(responseJson) {
     var candidates = responseJson && responseJson.candidates;
     if (!candidates || !candidates.length) {
@@ -310,6 +366,9 @@
           return item.title;
         }).join(", ");
       }).join(" | ");
+    }
+    if (tabId === "nano-banana") {
+      return "Current tab: Nano Banana image studio. The user can generate images, upload reference images, and chat with Gemini image-preview models.";
     }
     return "Current tab: Gemini Chat. The user can ask about any dashboard section.";
   }
@@ -443,6 +502,68 @@
     return panelHeader(tab) + promptButtons("motivation") + '<div id="quote-stage">' + quoteCard() + '</div><div class="two-column"><article class="info-card"><h3>Today Actions</h3><ul class="clean-list">' + actions + '</ul></article><article class="info-card"><h3>Quote Bank</h3><div class="quote-bank">' + quotes + "</div></article></div>";
   }
 
+  function nanoModelOptions() {
+    return data.nanoBanana.models.map(function(model) {
+      return '<option value="' + escapeAttr(model.id) + '">' + escapeHtml(model.label) + '</option>';
+    }).join("");
+  }
+
+  function selectedNanoModelDescription() {
+    var select = typeof document !== "undefined" ? document.getElementById("nano-model") : null;
+    var selected = select ? select.value : data.nanoBanana.defaultModel;
+    var model = data.nanoBanana.models.find(function(item) {
+      return item.id === selected;
+    }) || data.nanoBanana.models[0];
+    return model ? model.description : "";
+  }
+
+  function renderNanoBananaPanel() {
+    var tab = getTab("nano-banana");
+    var features = data.nanoBanana.features.map(function(feature) {
+      return [
+        '<article class="feature-card nano-feature">',
+        '<h3>' + escapeHtml(feature.title) + '</h3>',
+        '<p>' + escapeHtml(feature.description) + '</p>',
+        '</article>'
+      ].join("");
+    }).join("");
+
+    return [
+      panelHeader(tab),
+      promptButtons("nano-banana"),
+      '<section class="nano-workbench" aria-label="Nano Banana image generation workspace">',
+      '<div class="nano-config-grid">',
+      '<article class="info-card nano-config-card">',
+      '<label for="nano-model">Nano Banana model</label>',
+      '<select id="nano-model">' + nanoModelOptions() + '</select>',
+      '<p class="model-info" id="nano-model-info">' + escapeHtml(data.nanoBanana.models[0].description) + '</p>',
+      '</article>',
+      '<article class="info-card nano-config-card">',
+      '<h3>Recovered project</h3>',
+      '<p>This tab preserves your previous Gemini image generation website instead of replacing it with the dashboard.</p>',
+      '</article>',
+      '</div>',
+      '<div class="nano-chat-container" id="nano-chat-container" aria-live="polite"></div>',
+      '<div class="nano-input-section">',
+      '<div class="nano-input-wrapper">',
+      '<label for="nano-user-input">Prompt</label>',
+      '<textarea id="nano-user-input" rows="3" placeholder="Describe the image, edit, or analysis you want. Drop or paste images here."></textarea>',
+      '<div class="nano-image-preview-container" id="nano-image-preview-container"></div>',
+      '</div>',
+      '<div class="nano-input-buttons">',
+      '<label class="nano-upload-btn" for="nano-image-upload" title="Attach images">',
+      '<span aria-hidden="true">+</span>',
+      '<input type="file" id="nano-image-upload" multiple accept="image/*" hidden>',
+      '</label>',
+      '<button type="button" id="nano-send-btn" class="primary-button">Send</button>',
+      '</div>',
+      '</div>',
+      '<button type="button" id="nano-clear-chat" class="clear-btn">Clear Chat</button>',
+      '<div class="features nano-features">' + features + '</div>',
+      '</section>'
+    ].join("");
+  }
+
   function renderStreamingPanel() {
     var tab = getTab("streaming");
     function renderPlatforms(platformList, live) {
@@ -522,7 +643,8 @@
       health: renderHealthPanel,
       travel: renderTravelPanel,
       motivation: renderMotivationPanel,
-      streaming: renderStreamingPanel
+      streaming: renderStreamingPanel,
+      "nano-banana": renderNanoBananaPanel
     };
     Object.keys(renderers).forEach(function(tabId) {
       var panel = document.querySelector('[data-panel="' + tabId + '"]');
@@ -739,6 +861,283 @@
     });
   }
 
+  function fileToBase64(file) {
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function() {
+        resolve(String(reader.result).split(",")[1] || "");
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderNanoBananaPreviews() {
+    var container = document.getElementById("nano-image-preview-container");
+    if (!container) return;
+    container.innerHTML = nanoBananaImages.map(function(image) {
+      return [
+        '<div class="nano-image-preview-item" data-id="' + escapeAttr(image.id) + '">',
+        '<img src="data:' + escapeAttr(image.mimeType) + ';base64,' + escapeAttr(image.base64) + '" alt="' + escapeAttr(image.name) + '">',
+        '<button type="button" class="nano-remove-image" data-remove-nano-image="' + escapeAttr(image.id) + '" aria-label="Remove ' + escapeAttr(image.name) + '">x</button>',
+        '</div>'
+      ].join("");
+    }).join("");
+  }
+
+  function renderNanoBananaChat() {
+    var container = document.getElementById("nano-chat-container");
+    if (!container) return;
+    if (!nanoBananaHistory.length) {
+      container.innerHTML = '<div class="nano-message assistant"><div class="message-header">Gemini - Ready</div><div class="message-content">Paste your Gemini API key above, choose a Nano Banana model, then generate or edit images here.</div></div>';
+      return;
+    }
+    container.innerHTML = nanoBananaHistory.map(function(message) {
+      return [
+        '<div class="nano-message ' + escapeAttr(message.role) + '">',
+        '<div class="message-header">' + escapeHtml(message.sender) + ' - ' + escapeHtml(message.time) + '</div>',
+        '<div class="message-content">' + (message.html || markdownLite(message.text || "")) + '</div>',
+        '</div>'
+      ].join("");
+    }).join("");
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function addNanoBananaMessage(role, text, html) {
+    nanoBananaHistory.push({
+      role: role,
+      sender: role === "user" ? "You" : role === "error" ? "Error" : "Gemini",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      text: text || "",
+      html: html || ""
+    });
+    renderNanoBananaChat();
+  }
+
+  function clearNanoBananaImages() {
+    nanoBananaImages = [];
+    renderNanoBananaPreviews();
+  }
+
+  function removeNanoBananaImage(id) {
+    nanoBananaImages = nanoBananaImages.filter(function(image) {
+      return String(image.id) !== String(id);
+    });
+    renderNanoBananaPreviews();
+  }
+
+  function processNanoImageFiles(files) {
+    var imageFiles = Array.prototype.slice.call(files || []).filter(function(file) {
+      return file && file.type && file.type.indexOf("image/") === 0;
+    });
+    return imageFiles.reduce(function(previous, file) {
+      return previous.then(function() {
+        if (file.size > 20 * 1024 * 1024) {
+          addNanoBananaMessage("error", "File " + file.name + " is too large. Max size is 20MB.");
+          return null;
+        }
+        return fileToBase64(file).then(function(base64) {
+          nanoBananaImages.push({
+            id: String(Date.now()) + "-" + Math.random().toString(16).slice(2),
+            base64: base64,
+            mimeType: file.type,
+            name: file.name
+          });
+          renderNanoBananaPreviews();
+          return null;
+        });
+      });
+    }, Promise.resolve());
+  }
+
+  function nanoBananaContentsForHistory() {
+    return nanoBananaHistory
+      .filter(function(message) {
+        return message.role === "user" || message.role === "assistant";
+      })
+      .slice(-8)
+      .map(function(message) {
+        return {
+          role: message.role === "assistant" ? "model" : "user",
+          parts: [{ text: message.text || "" }]
+        };
+      });
+  }
+
+  function extractNanoBananaHtml(responseJson) {
+    var parts = responseJson && responseJson.candidates && responseJson.candidates[0] && responseJson.candidates[0].content ? responseJson.candidates[0].content.parts || [] : [];
+    var html = "";
+    var textForHistory = "";
+    parts.forEach(function(part) {
+      if (part.text) {
+        textForHistory += part.text;
+        html += markdownLite(part.text);
+      }
+      if (part.inlineData) {
+        html += '<img src="data:' + escapeAttr(part.inlineData.mimeType) + ';base64,' + escapeAttr(part.inlineData.data) + '" alt="Generated Nano Banana image">';
+      }
+    });
+    if (!html) {
+      html = "No response received after 3 attempts. Please try again.";
+      textForHistory = html;
+    }
+    return {
+      html: html,
+      text: textForHistory || "Generated image response."
+    };
+  }
+
+  function sendNanoBananaMessage() {
+    var apiKey = readApiKey();
+    var input = document.getElementById("nano-user-input");
+    var model = document.getElementById("nano-model");
+    var sendButton = document.getElementById("nano-send-btn");
+    var userText = input ? input.value.trim() : "";
+    var images = nanoBananaImages.slice();
+
+    if (!apiKey) {
+      addNanoBananaMessage("error", "Please paste your Gemini API key in the top-right panel first.");
+      setStatus("Paste your Gemini API key before using Nano Banana.", "error");
+      return Promise.resolve();
+    }
+    if (!userText && !images.length) return Promise.resolve();
+
+    var imageHtml = images.map(function(image) {
+      return '<img src="data:' + escapeAttr(image.mimeType) + ';base64,' + escapeAttr(image.base64) + '" alt="' + escapeAttr(image.name) + '">';
+    }).join("");
+    var displayHtml = (imageHtml ? '<div class="user-images">' + imageHtml + '</div>' : "") + (userText ? '<p>' + escapeHtml(userText) + '</p>' : "");
+    addNanoBananaMessage("user", userText || "Image prompt", displayHtml);
+    if (input) input.value = "";
+    clearNanoBananaImages();
+    if (sendButton) {
+      sendButton.disabled = true;
+      sendButton.textContent = "Working...";
+    }
+
+    var request = buildNanoBananaRequest({
+      apiKey: apiKey,
+      model: model ? model.value : data.nanoBanana.defaultModel,
+      userText: userText,
+      images: images,
+      history: nanoBananaContentsForHistory()
+    });
+
+    var attempts = 0;
+    function attemptFetch() {
+      attempts += 1;
+      return fetch(request.url, request.options)
+        .then(function(response) {
+          return response.json().catch(function() {
+            return {};
+          }).then(function(json) {
+            if (!response.ok || json.error) {
+              var message = json.error && json.error.message ? json.error.message : "Nano Banana request failed with HTTP " + response.status + ".";
+              throw new Error(message);
+            }
+            var parts = json.candidates && json.candidates[0] && json.candidates[0].content ? json.candidates[0].content.parts || [] : [];
+            if (!parts.some(function(part) { return part.text || part.inlineData; }) && attempts < 3) {
+              if (sendButton) sendButton.textContent = "Retry " + attempts + "/3";
+              return new Promise(function(resolve) {
+                root.setTimeout(resolve, 1000 * attempts);
+              }).then(attemptFetch);
+            }
+            return json;
+          });
+        });
+    }
+
+    return attemptFetch()
+      .then(function(json) {
+        var extracted = extractNanoBananaHtml(json);
+        addNanoBananaMessage("assistant", extracted.text, extracted.html);
+        setStatus("Nano Banana responded.", "ok");
+      })
+      .catch(function(error) {
+        addNanoBananaMessage("error", "Nano Banana error: " + error.message);
+        setStatus("Nano Banana request failed.", "error");
+      })
+      .finally(function() {
+        if (sendButton) {
+          sendButton.disabled = false;
+          sendButton.textContent = "Send";
+        }
+      });
+  }
+
+  function clearNanoBananaChat() {
+    nanoBananaHistory = [];
+    clearNanoBananaImages();
+    renderNanoBananaChat();
+    setStatus("Nano Banana chat reset.", "ok");
+  }
+
+  function setupNanoBanana() {
+    var model = document.getElementById("nano-model");
+    var modelInfo = document.getElementById("nano-model-info");
+    var input = document.getElementById("nano-user-input");
+    var upload = document.getElementById("nano-image-upload");
+    var send = document.getElementById("nano-send-btn");
+    var clear = document.getElementById("nano-clear-chat");
+    if (!input || !model) return;
+
+    model.value = data.nanoBanana.defaultModel;
+    if (modelInfo) modelInfo.textContent = selectedNanoModelDescription();
+    model.addEventListener("change", function() {
+      if (modelInfo) modelInfo.textContent = selectedNanoModelDescription();
+    });
+
+    if (upload) {
+      upload.addEventListener("change", function(event) {
+        processNanoImageFiles(event.target.files).then(function() {
+          event.target.value = "";
+        });
+      });
+    }
+
+    input.addEventListener("dragover", function(event) {
+      event.preventDefault();
+      input.classList.add("is-drop-target");
+    });
+    input.addEventListener("dragleave", function(event) {
+      event.preventDefault();
+      input.classList.remove("is-drop-target");
+    });
+    input.addEventListener("drop", function(event) {
+      event.preventDefault();
+      input.classList.remove("is-drop-target");
+      processNanoImageFiles(event.dataTransfer.files);
+    });
+    input.addEventListener("paste", function(event) {
+      var items = Array.prototype.slice.call(event.clipboardData ? event.clipboardData.items : []);
+      var files = items.filter(function(item) {
+        return item.type && item.type.indexOf("image/") === 0;
+      }).map(function(item) {
+        return item.getAsFile();
+      }).filter(Boolean);
+      if (files.length) {
+        event.preventDefault();
+        processNanoImageFiles(files);
+      }
+    });
+    input.addEventListener("keydown", function(event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendNanoBananaMessage();
+      }
+    });
+
+    if (send) send.addEventListener("click", sendNanoBananaMessage);
+    if (clear) clear.addEventListener("click", clearNanoBananaChat);
+
+    document.addEventListener("click", function(event) {
+      var remove = event.target.closest("[data-remove-nano-image]");
+      if (remove) removeNanoBananaImage(remove.dataset.removeNanoImage);
+    });
+
+    renderNanoBananaChat();
+    renderNanoBananaPreviews();
+  }
+
   function updateStreamingPanel() {
     var panel = document.querySelector('[data-panel="streaming"]');
     if (panel) panel.innerHTML = renderStreamingPanel();
@@ -846,12 +1245,14 @@
     setupTabs();
     setupChat();
     setupQuotes();
+    setupNanoBanana();
     handleKeyPersistence();
     setActiveTab(currentTab);
   }
 
   root.AIHubApp = {
     buildGeminiRequest: buildGeminiRequest,
+    buildNanoBananaRequest: buildNanoBananaRequest,
     buildStreamingRefreshRequest: buildStreamingRefreshRequest,
     parseStreamingRefreshResponse: parseStreamingRefreshResponse,
     extractGeminiText: extractGeminiText,

@@ -69,6 +69,15 @@
         summary: "Rows for Netflix, Hulu, Apple TV, and HBO Max with dated US popularity signals.",
         image: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
         imageAlt: "Movie theater seats facing a screen"
+      },
+      {
+        id: "nano-banana",
+        label: "Nano Banana",
+        kicker: "Recovered image generation tool",
+        title: "Nano Banana image studio",
+        summary: "The previous Gemini image-generation chat is preserved here with uploads, previews, image outputs, and retry handling.",
+        image: "https://images.unsplash.com/photo-1542037104857-ffbb0b9155fb?auto=format&fit=crop&w=1200&q=80",
+        imageAlt: "Creative studio desk with image work on screens"
       }
     ],
     aiUpdates: [
@@ -427,6 +436,64 @@
         }
       ]
     },
+    nanoBanana: {
+      defaultModel: "models/gemini-3.1-flash-image-preview",
+      models: [
+        {
+          id: "models/gemini-3.1-flash-image-preview",
+          label: "Nano Banana 2 (Fast Image Generation)",
+          description: "Nano Banana 2: fast, high-efficiency image generation optimized for speed and volume."
+        },
+        {
+          id: "models/gemini-3-pro-image-preview",
+          label: "Nano Banana Pro (Studio Image Generation)",
+          description: "Nano Banana Pro: studio-quality image generation with stronger text rendering and composition control."
+        },
+        {
+          id: "models/gemini-3.1-pro-preview",
+          label: "Gemini 3.1 Pro Preview",
+          description: "Gemini 3.1 Pro: stronger reasoning for complex prompts, edits, and planning."
+        },
+        {
+          id: "models/gemini-2.5-flash-preview-05-20",
+          label: "Gemini 2.5 Flash Preview",
+          description: "Gemini 2.5 Flash: fast model with thinking and reasoning capabilities."
+        },
+        {
+          id: "models/gemini-2.0-flash",
+          label: "Gemini 2.0 Flash",
+          description: "Gemini 2.0 Flash: fast, smart everyday chat and multimodal work."
+        },
+        {
+          id: "models/gemini-1.5-pro",
+          label: "Gemini 1.5 Pro",
+          description: "Gemini 1.5 Pro: advanced model for larger context and complex tasks."
+        },
+        {
+          id: "models/gemini-1.5-flash",
+          label: "Gemini 1.5 Flash",
+          description: "Gemini 1.5 Flash: balanced speed and performance for common tasks."
+        }
+      ],
+      features: [
+        {
+          title: "Image Generation",
+          description: "Create images with Nano Banana 2 and Nano Banana Pro models."
+        },
+        {
+          title: "Image Input",
+          description: "Upload, paste, or drag multiple images for edits, references, and analysis."
+        },
+        {
+          title: "Latest Models",
+          description: "Use Gemini image-preview and chat models from the recovered project."
+        },
+        {
+          title: "Secure Key Handling",
+          description: "Your Gemini key is read from the dashboard key field and is not committed to the repo."
+        }
+      ]
+    },
     promptChips: {
       ai: [
         "Give me a ranked reading list for today's AI and coding-agent news.",
@@ -457,6 +524,11 @@
         "Build my weekend watchlist from Netflix, Hulu, Apple TV, and HBO Max.",
         "Pick one show per platform based on mood: intense, funny, smart, comfort.",
         "Explain what is trending and what I can skip."
+      ],
+      "nano-banana": [
+        "Generate a cinematic product image with dramatic lighting.",
+        "Edit the uploaded image into a clean studio-style hero visual.",
+        "Create three prompt variants for a high-quality Nano Banana image generation run."
       ]
     }
   };
