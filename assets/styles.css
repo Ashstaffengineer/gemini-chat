@@ -196,11 +196,11 @@ textarea {
 }
 
 .tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
   gap: 8px;
-  overflow-x: auto;
+  overflow: visible;
   padding: 8px 0 14px;
-  scrollbar-width: thin;
 }
 
 .tab-button {
@@ -208,11 +208,10 @@ textarea {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  flex: 0 0 auto;
-  min-width: 128px;
+  min-width: 0;
   padding: 0 14px;
   font-weight: 800;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .tab-icon {
@@ -1332,6 +1331,6 @@ blockquote {
   }
 
   .tab-button {
-    min-width: 112px;
+    min-height: 44px;
   }
 }
